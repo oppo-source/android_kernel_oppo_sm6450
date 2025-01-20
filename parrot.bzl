@@ -105,8 +105,10 @@ def define_parrot():
         "drivers/power/reset/qcom-pon.ko",
         "drivers/power/reset/qcom-reboot-reason.ko",
         "drivers/power/reset/reboot-mode.ko",
-        "drivers/power/supply/qti_battery_charger.ko",
+        "drivers/power/oplus/v1/oplus_chg.ko",
+        "drivers/power/oplus/test-kit/test-kit.ko",
         "drivers/pwm/pwm-qti-lpg.ko",
+        "drivers/regulator/camera_aw37004/oplus_camera_aw37004.ko",
         "drivers/regulator/debug-regulator.ko",
         "drivers/regulator/proxy-consumer.ko",
         "drivers/regulator/qcom-amoled-regulator.ko",
@@ -190,6 +192,7 @@ def define_parrot():
         "drivers/soc/qcom/sys_pm_vx.ko",
         "drivers/soc/qcom/sysmon_subsystem_stats.ko",
         "drivers/soc/qcom/tmecom/tmecom-intf.ko",
+        "drivers/soc/oplus/boot/qcom_watchdog/qcom_enhance_watchdog.ko",
         "drivers/spi/spi-msm-geni.ko",
         "drivers/spmi/spmi-pmic-arb.ko",
         "drivers/spmi/spmi-pmic-arb-debug.ko",
@@ -241,6 +244,12 @@ def define_parrot():
         "drivers/virt/gunyah/gunyah_loader.ko",
         "kernel/msm_sysstats.ko",
         "kernel/sched/walt/sched-walt.ko",
+        "kernel/oplus_cpu/sched/sched_assist/oplus_bsp_sched_assist.ko",
+        "kernel/oplus_cpu/uad/ua_cpu_ioctl.ko",
+        "kernel/oplus_cpu/sched/frame_boost/oplus_bsp_frame_boost.ko",
+        "kernel/oplus_cpu/sched/sched_info/oplus_bsp_schedinfo.ko",
+        "kernel/oplus_cpu/sched/task_cpustats/oplus_bsp_task_cpustats.ko",
+        "kernel/oplus_cpu/sched/task_sched/oplus_bsp_task_sched.ko",
         "kernel/trace/qcom_ipc_logging.ko",
         "net/qrtr/qrtr.ko",
         "net/qrtr/qrtr-gunyah.ko",
@@ -248,6 +257,32 @@ def define_parrot():
         "net/qrtr/qrtr-smd.ko",
         "net/wireless/cfg80211.ko",
         "sound/usb/snd-usb-audio-qmi.ko",
+        "drivers/soc/oplus/boot/cmdline_parser/oplusboot.ko",
+        "drivers/soc/oplus/boot/cmdline_parser/oplus_ftm_mode.ko",
+        "drivers/soc/oplus/boot/cmdline_parser/buildvariant.ko",
+        "drivers/soc/oplus/boot/cmdline_parser/cdt_integrity.ko",
+        "drivers/soc/oplus/boot/cmdline_parser/oplus_charger_present.ko",
+        "drivers/soc/oplus/boot/oplus_projectinfo/oplus_bsp_boot_projectinfo.ko",
+        "drivers/soc/oplus/boot/bootmode/boot_mode.ko",
+        "drivers/soc/oplus/boot/bootloader_log/bootloader_log.ko",
+        "drivers/soc/oplus/mdmrst/oplus_mdmrst.ko",
+        "drivers/soc/oplus/device_info/device_info.ko",
+        "drivers/base/kernelFwUpdate/oplus_bsp_fw_update.ko",
+        "drivers/base/touchpanel_notify/oplus_bsp_tp_notify.ko",
+        "drivers/soc/qcom/qcom_dynamic_ramoops.ko",
+        "drivers/soc/oplus/storage/common/ufs_oplus_dbg/ufs-oplus-dbg.ko",
+        "drivers/soc/oplus/storage/common/storage_log/oplus_storage_log.ko",
+        "drivers/soc/oplus/storage/common/oplus_uprobe/oplus_uprobe.ko",
+        "drivers/nfc/thn31/tms_device_modules.ko",
+        "drivers/nfc/oplus_nfc/oplus_nfc.ko",
+        "drivers/soc/oplus/storage/common/wq_dynamic_priority/oplus_wq_dynamic_priority.ko",
+        #ifdef CONFIG_OPLUS_FEATURE_MM_FEEDBACK
+        "drivers/soc/oplus/multimedia/oplus_mm_kevent.ko",
+        "drivers/soc/oplus/multimedia/oplus_mm_kevent_fb.ko",
+        #endif /* CONFIG_OPLUS_FEATURE_MM_FEEDBACK */
+        "mm/mm_osvelte/oplus_bsp_mm_osvelte.ko",
+        "drivers/soc/oplus/dft/common/olc/olc.ko",
+        "drivers/soc/oplus/dft/common/feedback/kernel_fb.ko",
     ]
 
     _parrot_consolidate_in_tree_modules = _parrot_in_tree_modules + [
@@ -270,17 +305,17 @@ def define_parrot():
 
         if variant == "consolidate":
             mod_list = _parrot_consolidate_in_tree_modules
-            board_bootconfig_extras += ["androidboot.serialconsole=1"]
+            board_bootconfig_extras += ["androidboot.serialconsole=0"]
             board_kernel_cmdline_extras += [
                 # do not sort
-                "console=ttyMSM0,115200n8",
-                "qcom_geni_serial.con_enabled=1",
+                "console=ttynull",
+                "qcom_geni_serial.con_enabled=0",
                 "earlycon",
             ]
             kernel_vendor_cmdline_extras += [
                 # do not sort
-                "console=ttyMSM0,115200n8",
-                "qcom_geni_serial.con_enabled=1",
+                "console=ttynull",
+                "qcom_geni_serial.con_enabled=0",
                 "earlycon",
             ]
         else:

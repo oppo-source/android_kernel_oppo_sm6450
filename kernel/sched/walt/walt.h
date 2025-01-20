@@ -23,6 +23,14 @@
 
 #define MSEC_TO_NSEC (1000 * 1000)
 
+#if IS_ENABLED(CONFIG_OPLUS_FEATURE_SCHED_ASSIST)
+#include "../../oplus_cpu/sched/sched_assist/sa_fair.h"
+#endif
+
+#if IS_ENABLED(CONFIG_OPLUS_FEATURE_FRAME_BOOST)
+#include "../kernel/oplus_cpu/sched/frame_boost/frame_group.h"
+#endif
+
 #ifdef CONFIG_HZ_300
 /*
  * Tick interval becomes to 3333333 due to
@@ -1024,7 +1032,6 @@ static inline bool task_fits_max(struct task_struct *p, int dst_cpu)
 {
 	unsigned long task_boost = per_task_boost(p);
 	cpumask_t other_cluster;
-	struct walt_task_struct *wts = (struct walt_task_struct *) p->android_vendor_data1;
 	int ret = -1;
 
 	/*
@@ -1038,13 +1045,11 @@ static inline bool task_fits_max(struct task_struct *p, int dst_cpu)
 	if (is_max_possible_cluster_cpu(dst_cpu))
 		return true;
 
-	if (wts->pipeline_cpu != -1) {
-		ret = pipeline_fits_smaller_cpus(p);
-		if (ret == 0)
-			return false;
-		else if (ret == 1)
-			return true;
-	}
+	ret = pipeline_fits_smaller_cpus(p);
+	if (ret == 0)
+		return false;
+	else if (ret == 1)
+		return true;
 
 	if (is_min_possible_cluster_cpu(dst_cpu)) {
 		if (task_boost_policy(p) == SCHED_BOOST_ON_BIG ||
@@ -1249,6 +1254,18 @@ static inline bool is_state1(void)
 /* determine if this task should be allowed to use a partially halted cpu */
 static inline bool task_reject_partialhalt_cpu(struct task_struct *p, int cpu)
 {
+#if IS_ENABLED(CONFIG_OPLUS_FEATURE_SCHED_ASSIST)
+	if (!task_tpd_check(p, cpu))
+		return true;
+	if (should_ux_task_skip_cpu(p, cpu))
+		return true;
+#endif
+
+#if IS_ENABLED(CONFIG_OPLUS_FEATURE_FRAME_BOOST)
+	if (fbg_skip_migration(p, task_cpu(p), cpu))
+		return true;
+#endif
+
 	if (p->prio < MAX_RT_PRIO)
 		return false;
 

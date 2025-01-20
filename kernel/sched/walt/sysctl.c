@@ -22,7 +22,9 @@ static int one_hundred = 100;
 static int one_thousand = 1000;
 static int one_thousand_twenty_four = 1024;
 static int two_thousand = 2000;
+#if !IS_ENABLED(CONFIG_OPLUS_FEATURE_PIPELINE)
 static int max_nr_pipeline = MAX_NR_PIPELINE;
+#endif
 
 /*
  * CFS task prio range is [100 ... 139]
@@ -1632,6 +1634,7 @@ static struct ctl_table walt_table[] = {
 		.mode		= 0644,
 		.proc_handler	= sched_task_handler,
 	},
+#if !IS_ENABLED(CONFIG_OPLUS_FEATURE_PIPELINE)
 	{
 		.procname	= "sched_pipeline",
 		.data		= (int *) PIPELINE,
@@ -1639,6 +1642,7 @@ static struct ctl_table walt_table[] = {
 		.mode		= 0644,
 		.proc_handler	= sched_task_handler,
 	},
+#endif
 	{
 		.procname	= "task_load_boost",
 		.data		= (int *) LOAD_BOOST,
@@ -1752,6 +1756,7 @@ static struct ctl_table walt_table[] = {
 		.extra1		= SYSCTL_ZERO,
 		.extra2		= &one_thousand_twenty_four,
 	},
+#if !IS_ENABLED(CONFIG_OPLUS_FEATURE_PIPELINE)
 	{
 		.procname	= "sched_heavy_nr",
 		.data		= &sysctl_sched_heavy_nr,
@@ -1761,6 +1766,7 @@ static struct ctl_table walt_table[] = {
 		.extra1		= SYSCTL_ZERO,
 		.extra2		= &max_nr_pipeline,
 	},
+#endif
 	{
 		.procname	= "sched_sbt_enable",
 		.data		= &sysctl_sched_sbt_enable,
@@ -1827,6 +1833,7 @@ static struct ctl_table walt_table[] = {
 		.mode		= 0644,
 		.proc_handler	= sched_pipeline_special_handler,
 	},
+#if !IS_ENABLED(CONFIG_OPLUS_FEATURE_PIPELINE)
 	{
 		.procname	= "sched_pipeline_util_thres",
 		.data		= &sysctl_sched_pipeline_util_thres,
@@ -1836,6 +1843,7 @@ static struct ctl_table walt_table[] = {
 		.extra1		= SYSCTL_ZERO,
 		.extra2		= SYSCTL_INT_MAX,
 	},
+#endif
 	{
 		.procname	= "sched_walt_core_util",
 		.data		= &sysctl_sched_walt_core_util,

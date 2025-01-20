@@ -35,3 +35,30 @@ obj-y				+= ti/
 obj-$(CONFIG_ARCH_U8500)	+= ux500/
 obj-$(CONFIG_PLAT_VERSATILE)	+= versatile/
 obj-y				+= xilinx/
+
+#ifdef OPLUS_FEATURE_MM_FEEDBACK
+obj-$(CONFIG_OPLUS_FEATURE_MM_FEEDBACK)	+= oplus/multimedia/
+#endif /* OPLUS_FEATURE_MM_FEEDBACK */
+
+#ifdef OPLUS_FEATURE_BOOT
+obj-y += oplus/boot/
+#endif /* OPLUS_FEATURE_BOOT */
+
+#ifdef OPLUS_FEATURE_MODEM_MINIDUMP
+obj-$(CONFIG_OPLUS_FEATURE_RECORD_MDMRST)     += oplus/mdmrst/
+#endif /*OPLUS_FEATURE_MODEM_MINIDUMP*/
+
+obj-$(CONFIG_OPLUS_DEVICE_IFNO)  +=  oplus/device_info/
+
+#ifdef OPLUS_UFS_DRIVER
+obj-$(CONFIG_OPLUS_UFS_DRIVER) += oplus/storage/common/ufs_oplus_dbg/
+obj-$(CONFIG_OPLUS_UFS_DRIVER) += oplus/storage/common/oplus_uprobe/
+obj-$(CONFIG_OPLUS_UFS_DRIVER) += oplus/storage/common/storage_log/
+obj-$(CONFIG_OPLUS_UFS_DRIVER) += oplus/storage/common/wq_dynamic_priority/
+#endif
+
+obj-$(CONFIG_OPLUS_FEATURE_QCOM_WATCHDOG) += oplus/boot/qcom_watchdog/
+
+#ifdef OPLUS_FEATURE_DFT
+obj-y += oplus/dft/
+#endif /* OPLUS_FEATURE_DFT */

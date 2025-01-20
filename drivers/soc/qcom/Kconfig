@@ -669,6 +669,12 @@ config CDSPRM_VTCM_DYNAMIC_DEBUG
 	  enabled, the vtcm partition details are sent to the CDSP via rpmsg
 	  channel.
 
+config OPLUS_POWERINFO_RPMH
+	bool "powerinfo rpmh config"
+	default n
+	help
+	  Select this config to enable powerinfo rpmh
+	  
 config QCOM_ADSP_SLEEPMON
 	tristate "ADSP sleep monitor"
 	depends on QCOM_SMEM

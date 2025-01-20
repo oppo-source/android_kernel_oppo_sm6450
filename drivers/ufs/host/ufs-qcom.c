@@ -33,6 +33,8 @@
 #include <linux/sched/walt.h>
 #endif
 #include <linux/nvmem-consumer.h>
+/* bsp.storage.ufs 2021.10.14 add for /proc/devinfo/ufs */
+#include <soc/oplus/ufs-oplus-dbg.h>
 
 #include <soc/qcom/ice.h>
 
@@ -1896,6 +1898,10 @@ static int ufs_qcom_suspend(struct ufs_hba *hba, enum ufs_pm_op pm_op,
 	struct ufs_qcom_host *host = ufshcd_get_variant(hba);
 	int err = 0;
 
+	//#ifdef CONFIG_OPLUS_UFS_DRIVER
+		ufs_sleep_time_get(hba);
+	//#endif
+
 	if (status == PRE_CHANGE)
 		return 0;
 
@@ -1940,6 +1946,10 @@ static int ufs_qcom_resume(struct ufs_hba *hba, enum ufs_pm_op pm_op)
 	struct ufs_qcom_host *host = ufshcd_get_variant(hba);
 	unsigned long flags;
 	int err;
+
+	//#ifdef CONFIG_OPLUS_UFS_DRIVER
+		ufs_active_time_get(hba);
+	//#endif
 
 	if (host->vddp_ref_clk && (hba->rpm_lvl > UFS_PM_LVL_3 ||
 				   hba->spm_lvl > UFS_PM_LVL_3))
@@ -2359,6 +2369,19 @@ static void ufs_qcom_override_pa_tx_hsg1_sync_len(struct ufs_hba *hba)
 			     err, sync_len_val);
 }
 
+static void ufs_qcom_override_pa_tx_hsg4_sync_len(struct ufs_hba *hba)
+{
+#define PA_TX_HSG4_SYNC_LENGTH 0x15D0
+	int err;
+	int sync_len_val = 0x4F;
+
+	err = ufshcd_dme_peer_set(hba, UIC_ARG_MIB(PA_TX_HSG4_SYNC_LENGTH),
+				  sync_len_val);
+	if (err)
+		dev_err(hba->dev, "Failed (%d) set PA_TX_HSG4_SYNC_LENGTH(%d)\n",
+			     err, sync_len_val);
+}
+
 static int ufs_qcom_apply_dev_quirks(struct ufs_hba *hba)
 {
 	unsigned long flags;
@@ -2383,6 +2406,9 @@ static int ufs_qcom_apply_dev_quirks(struct ufs_hba *hba)
 
 	if (hba->dev_quirks & UFS_DEVICE_QUIRK_PA_TX_HSG1_SYNC_LENGTH)
 		ufs_qcom_override_pa_tx_hsg1_sync_len(hba);
+
+	if (hba->dev_quirks & UFS_DEVICE_QUIRK_PA_TX_HSG4_SYNC_LENGTH)
+		ufs_qcom_override_pa_tx_hsg4_sync_len(hba);
 
 	ufshcd_parse_pm_levels(hba);
 
@@ -3876,6 +3902,10 @@ static int ufs_qcom_init(struct ufs_hba *hba)
 			dev_err(host->hba->dev, "Fail to register UFS panic notifier\n");
 	}
 
+	//#ifdef CONFIG_OPLUS_UFS_DRIVER
+		ufs_init_oplus_dbg(hba);
+	//#endif
+
 	return 0;
 
 out_disable_vccq_parent:
@@ -4301,6 +4331,10 @@ static void ufs_qcom_event_notify(struct ufs_hba *hba,
 	struct phy *phy = host->generic_phy;
 	bool ber_th_exceeded = false;
 	bool disable_ber = true;
+
+	//#ifdef CONFIG_OPLUS_UFS_DRIVER
+	recordSignalerr(hba, *(u32 *)data, evt);
+	//#endif
 
 	switch (evt) {
 	case UFS_EVT_PA_ERR:
@@ -4966,6 +5000,12 @@ static struct ufs_dev_quirk ufs_qcom_dev_fixups[] = {
 	{ .wmanufacturerid = UFS_VENDOR_TOSHIBA,
 	  .model = UFS_ANY_MODEL,
 	  .quirk = UFS_DEVICE_QUIRK_DELAY_AFTER_LPM },
+	{ .wmanufacturerid = UFS_VENDOR_SAMSUNG,
+	  .model = "KLUEG4RHGB-B0E1",
+	  .quirk = UFS_DEVICE_QUIRK_PA_TX_HSG4_SYNC_LENGTH },
+	{ .wmanufacturerid = UFS_VENDOR_SAMSUNG,
+	  .model = "KLUFG8RHGB-B0E1",
+	  .quirk = UFS_DEVICE_QUIRK_PA_TX_HSG4_SYNC_LENGTH },
 	{}
 };
 
@@ -5199,6 +5239,11 @@ out:
 	return ret;
 }
 
+static void ufs_qcom_config_scsi_dev(struct scsi_device *sdev)
+{
+    ufs_oplus_init_sdev(sdev);
+}
+
 /*
  * struct ufs_hba_qcom_vops - UFS QCOM specific variant operations
  *
@@ -5230,6 +5275,7 @@ static const struct ufs_hba_variant_ops ufs_hba_qcom_vops = {
 	.op_runtime_config	= ufs_qcom_op_runtime_config,
 	.get_outstanding_cqs	= ufs_qcom_get_outstanding_cqs,
 	.config_esi		= ufs_qcom_config_esi,
+	.config_scsi_dev	= ufs_qcom_config_scsi_dev,
 };
 
 /**
@@ -5760,7 +5806,7 @@ static bool ufs_qcom_read_boot_config(struct platform_device *pdev)
 	u8 *buf;
 	size_t len;
 	struct nvmem_cell *cell;
-	int boot_device_type, data;
+	int boot_device_type, data,platform_boot_config;
 	struct device *dev = &pdev->dev;
 
 	cell = nvmem_cell_get(dev, "boot_conf");
@@ -5788,8 +5834,14 @@ static bool ufs_qcom_read_boot_config(struct platform_device *pdev)
 	 * this fuse is blown by bootloader and pupulated in boot_config
 	 * register[1:5] - hence shift read data by 1 and mask it with 0x1f.
 	 */
-	data = *buf >> 1 & 0x1f;
-
+	if (of_property_read_u32(dev->of_node, "platform_boot_config",
+                                &platform_boot_config)) {
+		dev_warn(dev, "platform_boot_config get fail\n");
+		data = *buf >> 1 & 0x1f;
+	} else {
+		dev_warn(dev, "platform_boot_config get success:0x%x\n",platform_boot_config);
+		data = *buf >> 1 & platform_boot_config;
+	}
 
 	/**
 	 *  The value in the boot_device_type in dtsi node should match with the
@@ -5885,6 +5937,9 @@ static int ufs_qcom_remove(struct platform_device *pdev)
 		for (i = 0; i < r->num_groups; i++, qcg++)
 			remove_group_qos(qcg);
 	}
+	//#ifdef CONFIG_OPLUS_UFS_DRIVER
+	ufs_remove_oplus_dbg();
+	//#endif
 	if (msm_minidump_enabled())
 		atomic_notifier_chain_unregister(&panic_notifier_list,
 				&host->ufs_qcom_panic_nb);
