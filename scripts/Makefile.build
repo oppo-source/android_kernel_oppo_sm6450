@@ -29,6 +29,10 @@ ccflags-y  :=
 rustflags-y :=
 cppflags-y :=
 ldflags-y  :=
+#ifdef OPLUS_FEATURE_CHG_BASIC
+KBUILD_LDS_MODULE_ATTACH :=
+sub_objtool_obj :=
+#endif
 
 subdir-asflags-y :=
 subdir-ccflags-y :=
@@ -221,6 +225,10 @@ ifneq ($(findstring 1, $(KBUILD_EXTRA_WARN)),)
 cmd_warn_shared_object = $(if $(word 2, $(modname-multi)),$(warning $(kbuild-file): $*.o is added to multiple modules: $(modname-multi)))
 endif
 
+#ifdef OPLUS_FEATURE_CHG_BASIC
+objtool_dep += $(sub_objtool_obj)
+#endif
+
 define rule_cc_o_c
 	$(call cmd_and_fixdep,cc_o_c)
 	$(call cmd,checksrc)
@@ -247,9 +255,15 @@ $(obj)/%.o: $(src)/%.c $(recordmcount_source) FORCE
 # ensure to add $(obj)/ prefix by a shell command.
 cmd_mod = printf '%s\n' $(call real-search, $*.o, .o, -objs -y -m) | \
 	$(AWK) '!x[$$0]++ { print("$(obj)/"$$0) }' > $@
+#ifdef OPLUS_FEATURE_CHG_BASIC
+	cmd_mod_lds = $(if $(KBUILD_LDS_MODULE_ATTACH), cat $(srctree)/$(src)/$(firstword $(KBUILD_LDS_MODULE_ATTACH)) > $(@:.mod=.lds))
+#endif
 
 $(obj)/%.mod: FORCE
 	$(call if_changed,mod)
+#ifdef OPLUS_FEATURE_CHG_BASIC
+	$(call cmd,mod_lds)
+#endif
 
 quiet_cmd_cc_lst_c = MKLST   $@
       cmd_cc_lst_c = $(CC) $(c_flags) -g -c -o $*.o $< && \

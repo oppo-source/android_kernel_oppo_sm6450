@@ -11,7 +11,6 @@ load(":sun_vms.bzl", "define_sun_vms")
 load(":sun_allyes.bzl", "define_sun_allyes")
 load(":monaco.bzl", "define_monaco")
 load(":parrot.bzl", "define_parrot")
-load(":parrot_tuivm.bzl", "define_parrot_tuivm")
 load(":msm_common.bzl", "define_signing_keys")
 load("//build:msm_kernel_extensions.bzl", "define_top_level_rules")
 
@@ -31,4 +30,3 @@ def define_msm_platforms():
     define_sun_allyes()
     define_monaco()
     define_parrot()
-    define_parrot_tuivm()
