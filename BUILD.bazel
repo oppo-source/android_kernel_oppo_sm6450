@@ -98,6 +98,7 @@ filegroup(
     srcs = [
         # keep sorted
         "android/abi_gki_aarch64_amlogic",
+        "android/abi_gki_aarch64_asr",
         "android/abi_gki_aarch64_asus",
         "android/abi_gki_aarch64_db845c",
         "android/abi_gki_aarch64_exynos",
@@ -106,11 +107,14 @@ filegroup(
         "android/abi_gki_aarch64_galaxy",
         "android/abi_gki_aarch64_honor",
         "android/abi_gki_aarch64_imx",
+        "android/abi_gki_aarch64_kunit",
         "android/abi_gki_aarch64_lenovo",
         "android/abi_gki_aarch64_mtk",
+        "android/abi_gki_aarch64_mtktv",
         "android/abi_gki_aarch64_nothing",
         "android/abi_gki_aarch64_oplus",
         "android/abi_gki_aarch64_pixel",
+        "android/abi_gki_aarch64_pixel_watch",
         "android/abi_gki_aarch64_qcom",
         "android/abi_gki_aarch64_sunxi",
         "android/abi_gki_aarch64_tcl",
@@ -141,10 +145,19 @@ define_common_kernels(target_configs = {
         ],
     },
     "kernel_aarch64_16k": {
-        "kmi_symbol_list_strict_mode": False,
+        "kmi_symbol_list_strict_mode": True,
+        "kmi_symbol_list": "android/abi_gki_aarch64",
+        "additional_kmi_symbol_lists": [":aarch64_additional_kmi_symbol_lists"],
+        "trim_nonlisted_kmi": True,
+        "protected_exports_list": "android/abi_gki_protected_exports_aarch64",
+        "protected_modules_list": "android/gki_aarch64_protected_modules",
         "module_implicit_outs": get_gki_modules_list("arm64") + get_kunit_modules_list("arm64"),
         "make_goals": _GKI_AARCH64_MAKE_GOALS,
-        "extra_dist": [":test_mappings_zip"],
+        "ddk_headers_archive": ":kernel_aarch64_ddk_headers_archive",
+        "extra_dist": [
+            ":test_mappings_zip",
+            ":tests_zip_arm64",
+        ],
     },
     "kernel_x86_64": {
         "kmi_symbol_list_strict_mode": False,
@@ -174,6 +187,34 @@ kernel_build(
     make_goals = [
         "Image",
     ],
+)
+
+kernel_build(
+    name = "kernel_aarch64_microdroid_16k",
+    srcs = ["//common:kernel_aarch64_sources"],
+    outs = [
+        "Image",
+        "System.map",
+        "modules.builtin",
+        "modules.builtin.modinfo",
+        "vmlinux",
+        "vmlinux.symvers",
+    ],
+    build_config = "build.config.microdroid.aarch64",
+    make_goals = [
+        "Image",
+    ],
+    page_size = "16k",
+)
+
+copy_to_dist_dir(
+    name = "kernel_aarch64_microdroid_16k_dist",
+    data = [
+        ":kernel_aarch64_microdroid_16k",
+    ],
+    dist_dir = "out/kernel_aarch64_microdroid_16k/dist",
+    flat = True,
+    log = "info",
 )
 
 copy_to_dist_dir(
@@ -438,6 +479,7 @@ _DB845C_MODULE_OUTS = [
     "sound/soc/qcom/snd-soc-qcom-sdw.ko",
     "sound/soc/qcom/snd-soc-sdm845.ko",
     "sound/soc/qcom/snd-soc-sm8250.ko",
+    "kernel/oplus_cpu/thermal/horae_shell_temp.ko",
 ]
 
 _DB845C_WATCHDOG_MODULE_OUTS = [
@@ -881,8 +923,53 @@ ddk_headers(
     visibility = ["//visibility:public"],
 )
 
+# oplus modules depend on ack need headers add here
+# globs() for all architectures
+filegroup(
+    name = "all_headers_allowlist_common_globs_oplus",
+    srcs = glob([
+        "kernel/**/*.h",
+        "fs/**/*.h",
+        "**/**/*.h",
+        "scripts/dtc/libfdt/*.h",
+        "mm/*.h",
+    ]),
+    visibility = ["//visibility:private"],
+)
+# oplus modules depend on ack need directory add here
+linux_includes_oplus = [
+    "fs/proc",
+    "mm",
+    ".",
+]
+ddk_headers_archive(
+    name = "kernel_x86_64_ddk_headers_archive",
+    srcs = [
+        "all_headers_x86_64",
+    ],
+    visibility = ["//visibility:private"],
+)
+
 # Implementation details for DDK headers. The targets below cannot be directly
 # depended on by DDK modules.
+
+# Headers needed to include drivers/usb/host/xhci.h.
+ddk_headers(
+    name = "xhci_headers",
+    hdrs = [
+        "drivers/usb/core/hub.h",
+        "drivers/usb/core/usb.h",
+        "drivers/usb/host/pci-quirks.h",
+        "drivers/usb/host/xhci.h",
+        "drivers/usb/host/xhci-ext-caps.h",
+        "drivers/usb/host/xhci-plat.h",
+    ],
+    linux_includes = [
+        "drivers/usb",
+        "drivers/usb/host",
+    ],
+    visibility = ["//visibility:private"],
+)
 
 # DDK headers allowlist. This is the list of all headers and include
 # directories that are safe to use in DDK modules.
@@ -891,8 +978,12 @@ ddk_headers(
     hdrs = [
         "drivers/thermal/thermal_core.h",
         "drivers/thermal/thermal_netlink.h",
+        "sound/usb/card.h",
+        "sound/usb/usbaudio.h",
         ":all_headers_allowlist_aarch64_globs",
         ":all_headers_allowlist_common_globs",
+        ":all_headers_allowlist_common_globs_oplus",
+        ":xhci_headers",
     ],
     # The list of include directories where source files can #include headers
     # from. In other words, these are the `-I` option to the C compiler.
@@ -901,9 +992,10 @@ ddk_headers(
         "arch/arm64/include",
         "arch/arm64/include/uapi",
         "drivers/thermal",
+        "sound/usb",
         "include",
         "include/uapi",
-    ],
+    ] + linux_includes_oplus,
     visibility = ["//visibility:private"],
 )
 

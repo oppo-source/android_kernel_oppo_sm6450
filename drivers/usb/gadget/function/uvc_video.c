@@ -477,8 +477,11 @@ uvc_video_complete(struct usb_ep *ep, struct usb_request *req)
 		}
 	} else {
 		uvc_video_free_request(ureq, ep);
+		ret = 0;
 	}
 	spin_unlock_irqrestore(&video->req_lock, flags);
+	if (ret < 0)
+		uvcg_queue_cancel(queue, 0);
 }
 
 static int
@@ -757,6 +760,7 @@ int uvcg_video_enable(struct uvc_video *video)
 	video->req_int_count = 0;
 
 	uvc_video_ep_queue_initial_requests(video);
+	queue_work(video->async_wq, &video->pump);
 
 	return ret;
 }

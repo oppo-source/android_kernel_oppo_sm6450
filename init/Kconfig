@@ -869,6 +869,10 @@ config UCLAMP_BUCKETS_COUNT
 
 	  If in doubt, use the default value.
 
+#ifdef OPLUS_FEATURE_CPU
+source "kernel/oplus_cpu/Kconfig"
+#endif /* OPLUS_FEATURE_CPU */
+
 endmenu
 
 #
@@ -1041,6 +1045,10 @@ config RT_GROUP_SCHED
 	  realtime bandwidth for them.
 	  See Documentation/scheduler/sched-rt-group.rst for more information.
 
+config EXT_GROUP_SCHED
+	bool
+	depends on SCHED_CLASS_EXT && CGROUP_SCHED
+	default y
 endif #CGROUP_SCHED
 
 config SCHED_MM_CID
@@ -1924,10 +1932,12 @@ config RUST
 	bool "Rust support"
 	depends on HAVE_RUST
 	depends on RUST_IS_AVAILABLE
+	depends on !MODVERSIONS
 	depends on !GCC_PLUGINS
 	depends on !RANDSTRUCT
+	depends on !SHADOW_CALL_STACK
 	depends on !DEBUG_INFO_BTF || PAHOLE_HAS_LANG_EXCLUDE
-	depends on !CFI_CLANG || $(cc-option,-fsanitize=kcfi,-fsanitize-cfi-icall-experimental-normalize-integers)
+	select CONSTRUCTORS
 	help
 	  Enables Rust support in the kernel.
 
@@ -1944,12 +1954,15 @@ config RUST
 config RUSTC_VERSION_TEXT
 	string
 	depends on RUST
-	default $(shell,command -v $(RUSTC) >/dev/null 2>&1 && $(RUSTC) --version || echo n)
+	default "$(shell,$(RUSTC) --version 2>/dev/null)"
 
 config BINDGEN_VERSION_TEXT
 	string
 	depends on RUST
-	default $(shell,command -v $(BINDGEN) >/dev/null 2>&1 && $(BINDGEN) --version || echo n)
+	# The dummy parameter `workaround-for-0.69.0` is required to support 0.69.0
+	# (https://github.com/rust-lang/rust-bindgen/pull/2678). It can be removed when
+	# the minimum version is upgraded past that (0.69.1 already fixed the issue).
+	default "$(shell,$(BINDGEN) --version workaround-for-0.69.0 2>/dev/null)"
 
 #
 # Place an empty function call at each tracepoint site. Can be

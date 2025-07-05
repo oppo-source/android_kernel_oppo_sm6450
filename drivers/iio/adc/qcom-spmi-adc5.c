@@ -1103,7 +1103,12 @@ static int adc5_get_fw_channel_data(struct adc5_chip *adc,
 	} else {
 		prop->avg_samples = VADC_DEF_AVG_SAMPLES;
 	}
-
+/* #ifdef OPLUS_FEATURE_CHG_BASIC */
+	prop->scale_fn_type = -EINVAL;
+	ret = fwnode_property_read_u32(fwnode, "qcom,scale-fn-type", &value);
+	if (!ret && value < SCALE_HW_CALIB_INVALID)
+		prop->scale_fn_type = value;
+/* #endif */
 	if (fwnode_property_read_bool(fwnode, "qcom,ratiometric"))
 		prop->cal_method = ADC5_RATIOMETRIC_CAL;
 	else if (fwnode_property_read_bool(fwnode, "qcom,no-cal"))
@@ -1257,9 +1262,11 @@ static int adc5_get_fw_data(struct adc5_chip *adc)
 			fwnode_handle_put(child);
 			return ret;
 		}
-
-		prop.scale_fn_type =
-			adc->data->adc_chans[prop.channel].scale_fn_type;
+/* #ifdef OPLUS_FEATURE_CHG_BASIC */
+		if (prop.scale_fn_type == -EINVAL)
+/*#endif*/
+			prop.scale_fn_type =
+				adc->data->adc_chans[prop.channel].scale_fn_type;
 		*chan_props = prop;
 		adc_chan = &adc->data->adc_chans[prop.channel];
 

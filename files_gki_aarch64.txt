@@ -646,8 +646,6 @@ drivers/android/binder.c
 drivers/android/binder_alloc.c
 drivers/android/binder_alloc.h
 drivers/android/binder_internal.h
-drivers/android/binder_pick_impl.c
-drivers/android/binder_pick_impl.h
 drivers/android/binder_trace.h
 drivers/android/binderfs.c
 drivers/android/dbitmap.h

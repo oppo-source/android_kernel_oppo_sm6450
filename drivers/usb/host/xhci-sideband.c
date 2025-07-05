@@ -166,7 +166,8 @@ xhci_sideband_remove_endpoint(struct xhci_sideband *sb,
 	}
 
 	__xhci_sideband_remove_endpoint(sb, ep);
-	xhci_initialize_ring_info(ep->ring, 1);
+	if (ep->ring)
+		xhci_initialize_ring_info(ep->ring, 1);
 	mutex_unlock(&sb->mutex);
 
 	return 0;
@@ -263,7 +264,7 @@ xhci_sideband_create_interrupter(struct xhci_sideband *sb, int num_seg,
 {
 	int ret = 0;
 
-	if (!sb)
+	if (!sb || !sb->xhci)
 		return -ENODEV;
 
 	mutex_lock(&sb->mutex);
