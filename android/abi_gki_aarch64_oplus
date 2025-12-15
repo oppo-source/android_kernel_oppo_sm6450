@@ -192,6 +192,7 @@
   tcp_hashinfo
   tcp_reno_undo_cwnd
   touch_atime
+  __traceiter_android_rvh_do_madvise_bypass
   __traceiter_android_rvh_post_init_entity_util_avg
   __traceiter_android_rvh_rtmutex_force_update
   __traceiter_android_rvh_set_cpus_allowed_comm
@@ -322,12 +323,17 @@
   __traceiter_android_vh_tune_swappiness
   __traceiter_android_vh_unreserve_highatomic_bypass
   __traceiter_android_vh_update_page_mapcount
+  __tracepoint_android_vh_folio_add_lru_folio_activate
+  __tracepoint_android_vh_filemap_fault_pre_folio_locked
+  __tracepoint_android_vh_filemap_folio_mapped
+  __tracepoint_android_vh_folio_remove_rmap_ptes
   __traceiter_block_bio_queue
   __traceiter_block_getrq
   __traceiter_block_rq_complete
   __traceiter_block_rq_issue
   __traceiter_block_rq_merge
   __traceiter_block_rq_requeue
+  __traceiter_android_vh_check_set_ioprio
   __traceiter_mm_vmscan_kswapd_wake
   __traceiter_net_dev_queue
   __traceiter_net_dev_xmit
@@ -340,6 +346,15 @@
   __traceiter_sched_stat_wait
   __traceiter_sched_waking
   __traceiter_task_rename
+  __traceiter_android_vh_lru_gen_add_folio_skip
+  __traceiter_android_vh_lru_gen_del_folio_skip
+  __traceiter_android_vh_evict_folios_bypass
+  __traceiter_android_vh_keep_reclaimed_folio
+  __traceiter_android_vh_clear_reclaimed_folio
+  __traceiter_android_vh_filemap_pages
+  __traceiter_android_rvh_kswapd_shrink_node
+  __traceiter_android_rvh_perform_reclaim
+  __tracepoint_android_rvh_do_madvise_bypass
   __tracepoint_android_rvh_post_init_entity_util_avg
   __tracepoint_android_rvh_rtmutex_force_update
   __tracepoint_android_rvh_set_cpus_allowed_comm
@@ -470,12 +485,17 @@
   __tracepoint_android_vh_tune_swappiness
   __tracepoint_android_vh_unreserve_highatomic_bypass
   __tracepoint_android_vh_update_page_mapcount
+  __traceiter_android_vh_folio_add_lru_folio_activate
+  __traceiter_android_vh_filemap_fault_pre_folio_locked
+  __traceiter_android_vh_filemap_folio_mapped
+  __traceiter_android_vh_folio_remove_rmap_ptes
   __tracepoint_block_bio_queue
   __tracepoint_block_getrq
   __tracepoint_block_rq_complete
   __tracepoint_block_rq_issue
   __tracepoint_block_rq_merge
   __tracepoint_block_rq_requeue
+  __tracepoint_android_vh_check_set_ioprio
   __tracepoint_mm_vmscan_kswapd_wake
   __tracepoint_net_dev_queue
   __tracepoint_net_dev_xmit
@@ -488,6 +508,14 @@
   __tracepoint_sched_stat_wait
   __tracepoint_sched_waking
   __tracepoint_task_rename
+  __tracepoint_android_vh_lru_gen_add_folio_skip
+  __tracepoint_android_vh_lru_gen_del_folio_skip
+  __tracepoint_android_vh_evict_folios_bypass
+  __tracepoint_android_vh_keep_reclaimed_folio
+  __tracepoint_android_vh_clear_reclaimed_folio
+  __tracepoint_android_vh_filemap_pages
+  __tracepoint_android_rvh_kswapd_shrink_node
+  __tracepoint_android_rvh_perform_reclaim
   folio_total_mapcount
   page_mapping
   __trace_puts
@@ -527,6 +555,20 @@
   xt_register_match
   xt_unregister_match
   zero_pfn
+  mdmreason_set
+  __traceiter_android_vh_meminfo_proc_show
+  __traceiter_android_vh_exit_mm
+  __traceiter_android_vh_show_mem
+  __traceiter_android_vh_print_slabinfo_header
+  __traceiter_android_vh_cache_show
+  __tracepoint_android_vh_meminfo_proc_show
+  __tracepoint_android_vh_exit_mm
+  __tracepoint_android_vh_show_mem
+  __tracepoint_android_vh_print_slabinfo_header
+  __tracepoint_android_vh_cache_show
+  si_swapinfo
+  vmalloc_nr_pages
+  get_slabinfo
   crypto_register_scomp
   crypto_unregister_scomp
   zstd_get_params

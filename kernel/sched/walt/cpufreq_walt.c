@@ -16,6 +16,10 @@
 #include "walt.h"
 #include "trace.h"
 
+#if IS_ENABLED(CONFIG_OPLUS_FEATURE_FRAME_BOOST)
+#include <../kernel/oplus_cpu/sched/frame_boost/frame_group.h>
+#endif
+
 #define MAX_ZONES 10
 #define ZONE_TUPLE_SIZE 2
 #define MAX_UTIL 1024
@@ -78,6 +82,9 @@ struct waltgov_policy {
 	bool			rtg_boost_flag;
 	bool			hispeed_flag;
 	bool			conservative_pl_flag;
+#if IS_ENABLED(CONFIG_OPLUS_FEATURE_FRAME_BOOST)
+	unsigned int		flags;
+#endif
 };
 
 struct waltgov_cpu {
@@ -116,6 +123,11 @@ static bool waltgov_should_update_freq(struct waltgov_policy *wg_policy, u64 tim
 	 * to the separate rate limits.
 	 */
 
+#if IS_ENABLED(CONFIG_OPLUS_FEATURE_FRAME_BOOST)
+	if (wg_policy->flags & SCHED_CPUFREQ_DEF_FRAMEBOOST)
+		return true;
+#endif
+
 	delta_ns = time - wg_policy->last_freq_update_time;
 	return delta_ns >= wg_policy->min_rate_limit_ns;
 }
@@ -126,6 +138,11 @@ static bool waltgov_up_down_rate_limit(struct waltgov_policy *wg_policy, u64 tim
 	s64 delta_ns;
 
 	delta_ns = time - wg_policy->last_freq_update_time;
+
+#if IS_ENABLED(CONFIG_OPLUS_FEATURE_FRAME_BOOST)
+	if (wg_policy->flags & SCHED_CPUFREQ_DEF_FRAMEBOOST)
+		return false;
+#endif
 
 	if (next_freq > wg_policy->next_freq &&
 	    delta_ns < wg_policy->up_rate_delay_ns)
@@ -609,6 +626,9 @@ static unsigned int waltgov_next_freq_shared(struct waltgov_cpu *wg_cpu, u64 tim
 		waltgov_walt_adjust(j_wg_cpu, j_util, j_nl, &util, &max);
 	}
 
+#if IS_ENABLED(CONFIG_OPLUS_FEATURE_FRAME_BOOST)
+	fbg_freq_policy_util(wg_policy->flags, policy->cpus, &util);
+#endif
 	return get_next_freq(wg_policy, util, max, wg_cpu, time);
 }
 
@@ -644,6 +664,9 @@ static void waltgov_update_freq(struct waltgov_callback *cb, u64 time,
 	struct waltgov_cpu *wg_cpu = container_of(cb, struct waltgov_cpu, cb);
 	struct waltgov_policy *wg_policy = wg_cpu->wg_policy;
 	unsigned int next_f;
+#if IS_ENABLED(CONFIG_OPLUS_FEATURE_FRAME_BOOST)
+	unsigned long irq_flags;
+#endif
 
 	if (flags & WALT_CPUFREQ_SMART_FREQ_BIT) {
 		waltgov_update_smart_freq(cb, time, flags);
@@ -653,9 +676,16 @@ static void waltgov_update_freq(struct waltgov_callback *cb, u64 time,
 	if (!wg_policy->tunables->pl && flags & WALT_CPUFREQ_PL_BIT)
 		return;
 
+#if IS_ENABLED(CONFIG_OPLUS_FEATURE_FRAME_BOOST)
+	raw_spin_lock_irqsave(&wg_policy->update_lock, irq_flags);
+	wg_cpu->util = cpu_util_freq_walt(wg_cpu->cpu, &wg_cpu->walt_load, &wg_cpu->reasons);
+	wg_cpu->flags = flags;
+	wg_policy->flags = flags;
+#else
 	wg_cpu->util = cpu_util_freq_walt(wg_cpu->cpu, &wg_cpu->walt_load, &wg_cpu->reasons);
 	wg_cpu->flags = flags;
 	raw_spin_lock(&wg_policy->update_lock);
+#endif
 
 	waltgov_calc_avg_cap(wg_policy, wg_cpu->walt_load.ws,
 			   wg_policy->policy->cur);
@@ -681,7 +711,11 @@ static void waltgov_update_freq(struct waltgov_callback *cb, u64 time,
 	}
 
 out:
+#if IS_ENABLED(CONFIG_OPLUS_FEATURE_FRAME_BOOST)
+	raw_spin_unlock_irqrestore(&wg_policy->update_lock, irq_flags);
+#else
 	raw_spin_unlock(&wg_policy->update_lock);
+#endif
 }
 
 static void waltgov_work(struct kthread_work *work)
@@ -1536,6 +1570,9 @@ static int waltgov_start(struct cpufreq_policy *policy)
 	wg_policy->limits_changed		= false;
 	wg_policy->need_freq_update		= false;
 	wg_policy->cached_raw_freq		= 0;
+#if IS_ENABLED(CONFIG_OPLUS_FEATURE_FRAME_BOOST)
+	wg_policy->flags           		= 0;
+#endif
 
 	for_each_cpu(cpu, policy->cpus) {
 		struct waltgov_cpu *wg_cpu = &per_cpu(waltgov_cpu, cpu);
@@ -1552,6 +1589,10 @@ static int waltgov_start(struct cpufreq_policy *policy)
 	}
 
 	waltgov_disabled = false;
+
+#if IS_ENABLED(CONFIG_OPLUS_FEATURE_FRAME_BOOST)
+	fbg_add_update_freq_hook(waltgov_run_callback);
+#endif
 	return 0;
 }
 

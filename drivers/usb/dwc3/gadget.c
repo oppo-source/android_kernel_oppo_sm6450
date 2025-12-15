@@ -1737,6 +1737,10 @@ static int __dwc3_gadget_get_frame(struct dwc3 *dwc)
  */
 static int __dwc3_stop_active_transfer(struct dwc3_ep *dep, bool force, bool interrupt)
 {
+#ifndef OPLUS_FEATURE_CHG_BASIC
+	struct dwc3 *dwc = dep->dwc;
+#else
+#endif
 	struct dwc3_gadget_ep_cmd_params params;
 	u32 cmd;
 	int ret;

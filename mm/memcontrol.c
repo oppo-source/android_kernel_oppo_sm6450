@@ -33,6 +33,7 @@
 #include <linux/shmem_fs.h>
 #include <linux/hugetlb.h>
 #include <linux/pagemap.h>
+#include <linux/pagevec.h>
 #include <linux/vm_event_item.h>
 #include <linux/smp.h>
 #include <linux/page-flags.h>
@@ -1429,8 +1430,16 @@ void do_traversal_all_lruvec(void)
 		memcg = mem_cgroup_iter(NULL, NULL, NULL);
 		do {
 			struct lruvec *lruvec = mem_cgroup_lruvec(memcg, pgdat);
+			bool stop = false;
 
 			trace_android_vh_do_traversal_lruvec(lruvec);
+
+			trace_android_rvh_do_traversal_lruvec_ex(memcg, lruvec,
+								 &stop);
+			if (stop) {
+				mem_cgroup_iter_break(NULL, memcg);
+				break;
+			}
 
 			memcg = mem_cgroup_iter(NULL, memcg, NULL);
 		} while (memcg);
@@ -7403,6 +7412,18 @@ void __mem_cgroup_uncharge_list(struct list_head *page_list)
 	uncharge_gather_clear(&ug);
 	list_for_each_entry(folio, page_list, lru)
 		uncharge_folio(folio, &ug);
+	if (ug.memcg)
+		uncharge_batch(&ug);
+}
+
+void __mem_cgroup_uncharge_folios(struct folio_batch *folios)
+{
+	struct uncharge_gather ug;
+	unsigned int i;
+
+	uncharge_gather_clear(&ug);
+	for (i = 0; i < folios->nr; i++)
+		uncharge_folio(folios->folios[i], &ug);
 	if (ug.memcg)
 		uncharge_batch(&ug);
 }

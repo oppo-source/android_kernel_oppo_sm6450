@@ -1,0 +1,7 @@
+config OPLUS_CAMERA_SGM38121
+	tristate "config oplus camera_sgm38121 software"
+	help
+	  Say Y here to support the SGM38121 PMIC chip.
+	  This driver controls SGM38121 PMIC chip and the voltage
+	  regulators found in Qualcomm Technologies Inc. SGM38121
+	  PMIC.

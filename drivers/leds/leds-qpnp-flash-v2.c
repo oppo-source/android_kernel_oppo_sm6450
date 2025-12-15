@@ -171,7 +171,11 @@
 #define FLASH_LED_CHGR_MITIGATION_SEL_SHIFT		4
 #define FLASH_LED_CHGR_MITIGATION_THRSH_DEFAULT		0xA
 #define FLASH_LED_CHGR_MITIGATION_THRSH_MAX		0x1F
+#ifdef OPLUS_FEATURE_CHG_BASIC
+#define FLASH_LED_LMH_OCV_THRESH_DEFAULT_UV		2890000
+#else
 #define FLASH_LED_LMH_OCV_THRESH_DEFAULT_UV		3700000
+#endif
 #define FLASH_LED_LMH_RBATT_THRESH_DEFAULT_UOHM		400000
 #define FLASH_LED_IRES_BASE				3
 #define FLASH_LED_IRES_DIVISOR				2500
@@ -984,8 +988,13 @@ static int qpnp_flash_led_calc_max_current(struct qpnp_flash_led *led,
 			}
 		}
 
+#ifdef OPLUS_FEATURE_CHG_BASIC
+		rc = power_supply_get_property(led->batt_psy,
+			POWER_SUPPLY_PROP_VOLTAGE_NOW, &prop);
+#else
 		rc = power_supply_get_property(led->batt_psy,
 			POWER_SUPPLY_PROP_VOLTAGE_OCV, &prop);
+#endif
 		if (rc < 0) {
 			pr_err("Failed to get battery OCV, rc=%d\n", rc);
 			return rc;

@@ -24,6 +24,22 @@
 #include "walt.h"
 #include "trace.h"
 
+#if IS_ENABLED(CONFIG_OPLUS_FEATURE_FRAME_BOOST)
+#include <../kernel/oplus_cpu/sched/frame_boost/frame_group.h>
+#endif
+
+#ifdef CONFIG_OPLUS_SCHED_GROUP_OPT
+#include <../kernel/oplus_cpu/sched/sched_assist/sa_group.h>
+#endif
+
+#if IS_ENABLED(CONFIG_OPLUS_FEATURE_GKI_CPUFREQ_BOUNCING)
+#include <linux/cpufreq_bouncing.h>
+#endif
+
+#if IS_ENABLED(CONFIG_OPLUS_FEATURE_PIPELINE)
+#include <../kernel/oplus_cpu/sched/sched_assist/sa_pipeline.h>
+#endif
+
 const char *task_event_names[] = {
 	"PUT_PREV_TASK",
 	"PICK_NEXT_TASK",
@@ -57,6 +73,7 @@ DEFINE_SPINLOCK(enforce_high_irq_cpu_lock);
 DEFINE_PER_CPU(int, enforce_high_irq_cpus_refcount);
 
 DEFINE_PER_CPU(struct walt_rq, walt_rq);
+EXPORT_PER_CPU_SYMBOL_GPL(walt_rq);
 unsigned int sysctl_sched_user_hint;
 static u64 sched_clock_last;
 static bool walt_clock_suspended;
@@ -3771,6 +3788,10 @@ static void android_rvh_cpu_cgroup_online(void *unused, struct cgroup_subsys_sta
 		return;
 
 	walt_update_tg_pointer(css);
+
+#ifdef CONFIG_OPLUS_SCHED_GROUP_OPT
+	oplus_update_tg_map(css, false);
+#endif
 }
 
 static void android_rvh_cpu_cgroup_attach(void *unused,
@@ -4425,7 +4446,19 @@ static void walt_irq_work(struct irq_work *irq_work)
 	bool is_migration = false, is_asym_migration = false, is_pipeline_sync_migration = false;
 	u32 wakeup_ctr_sum = 0;
 	struct walt_sched_cluster *cluster;
+#if !IS_ENABLED(CONFIG_OPLUS_FEATURE_PIPELINE)
 	bool need_assign_heavy = false;
+#endif
+
+#if IS_ENABLED(CONFIG_OPLUS_FEATURE_GKI_CPUFREQ_BOUNCING)
+	for_each_sched_cluster(cluster) {
+		int cpu = cpumask_first(&cluster->cpus);
+		struct cpufreq_policy *pol = cpufreq_cpu_get_raw(cpu);
+
+		if (pol)
+			cb_update(pol, walt_sched_clock());
+	}
+#endif
 
 	if (irq_work == &walt_migration_irq_work)
 		is_migration = true;
@@ -4483,9 +4516,15 @@ static void walt_irq_work(struct irq_work *irq_work)
 
 	if (!is_migration) {
 		wrq = &per_cpu(walt_rq, cpu_of(this_rq()));
+#if !IS_ENABLED(CONFIG_OPLUS_FEATURE_PIPELINE)
 		need_assign_heavy = pipeline_check(wrq);
+#else
+		qcom_rearrange_pipeline_preferred_cpus(walt_scale_demand_divisor);
+#endif
 		core_ctl_check(wrq->window_start, wakeup_ctr_sum);
+#if !IS_ENABLED(CONFIG_OPLUS_FEATURE_PIPELINE)
 		pipeline_rearrange(wrq, need_assign_heavy);
+#endif
 		for_each_sched_cluster(cluster) {
 			update_smart_freq_legacy_reason_hyst_time(cluster);
 		}
@@ -4739,6 +4778,9 @@ static void android_rvh_set_task_cpu(void *unused, struct task_struct *p, unsign
 
 static void android_rvh_new_task_stats(void *unused, struct task_struct *p)
 {
+#if IS_ENABLED(CONFIG_OPLUS_FEATURE_FRAME_BOOST)
+	update_wake_up(p);
+#endif
 	if (unlikely(walt_disabled))
 		return;
 	mark_task_starting(p);
@@ -4982,6 +5024,10 @@ static void android_rvh_try_to_wake_up(void *unused, struct task_struct *p)
 	u64 wallclock;
 	unsigned int old_load;
 	struct walt_related_thread_group *grp = NULL;
+
+#if IS_ENABLED(CONFIG_OPLUS_FEATURE_FRAME_BOOST)
+	update_wake_up(p);
+#endif
 
 	if (unlikely(walt_disabled))
 		return;
@@ -5515,9 +5561,17 @@ static void walt_init_tg_pointers(void)
 	struct cgroup_subsys_state *css = &root_task_group.css;
 	struct cgroup_subsys_state *top_css = css;
 
+#ifdef CONFIG_OPLUS_SCHED_GROUP_OPT
+	oplus_update_tg_map(top_css, true);
+#endif
+
 	rcu_read_lock();
-	css_for_each_child(css, top_css)
+	css_for_each_child(css, top_css) {
 		walt_update_tg_pointer(css);
+#ifdef CONFIG_OPLUS_SCHED_GROUP_OPT
+		oplus_update_tg_map(css, true);
+#endif
+	}
 	rcu_read_unlock();
 }
 
@@ -5577,6 +5631,18 @@ static void walt_init(struct work_struct *work)
 	walt_init_cycle_counter();
 
 	stop_machine(walt_init_stop_handler, NULL, NULL);
+	/*
+	 * validate root-domain perf-domain is configured properly
+	 * to work with an asymmetrical soc. This is necessary
+	 * for load balance and task placement to work properly.
+	 * see walt_find_energy_efficient_cpu(), and
+	 * create_util_to_cost().
+	 */
+	rd = cpu_rq(cpumask_first(cpu_active_mask))->rd;
+	if (!rcu_access_pointer(rd->pd) && num_sched_clusters > 1)
+		WALT_BUG(WALT_BUG_WALT, NULL,
+			 "root domain's perf-domain values not initialized rd->pd=%p.",
+			 rd->pd);
 
 	walt_register_sysctl();
 	walt_register_debugfs();

@@ -3749,6 +3749,12 @@ static void arm_smmu_device_shutdown(struct platform_device *pdev)
 	if (!bitmap_empty(smmu->context_map, ARM_SMMU_MAX_CBS))
 		dev_notice(&pdev->dev, "disabling translation\n");
 
+	if(strstr(dev_name(&pdev->dev), "kgsl-smmu")){
+		dev_notice(&pdev->dev, " by pass disabling translation\n");
+		return;
+	}
+
+
 	if (smmu->impl && smmu->impl->device_remove)
 		smmu->impl->device_remove(smmu);
 

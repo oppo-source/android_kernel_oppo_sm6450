@@ -12,6 +12,21 @@
 #include "trace.h"
 #include <../../../drivers/android/binder_internal.h>
 #include "../../../drivers/android/binder_trace.h"
+#if IS_ENABLED(CONFIG_OPLUS_FEATURE_SCHED_ASSIST)
+#include <../kernel/oplus_cpu/sched/sched_assist/sa_fair.h>
+#include <../kernel/oplus_cpu/sched/sched_assist/sa_common.h>
+#ifdef CONFIG_OPLUS_CPU_AUDIO_PERF
+#include <../kernel/oplus_cpu/sched/sched_assist/sa_audio.h>
+#endif
+#endif
+
+#if IS_ENABLED(CONFIG_OPLUS_FEATURE_FRAME_BOOST)
+#include <../kernel/oplus_cpu/sched/frame_boost/frame_group.h>
+#endif
+
+#if IS_ENABLED(CONFIG_OPLUS_FEATURE_PIPELINE)
+#include <../kernel/oplus_cpu/sched/sched_assist/sa_pipeline.h>
+#endif
 
 static void create_util_to_cost_pd(struct em_perf_domain *pd)
 {
@@ -79,6 +94,10 @@ bias_to_this_cpu(struct task_struct *p, int cpu, int start_cpu)
 						cpu_active(cpu);
 
 	bool start_cap_test = !check_for_higher_capacity(start_cpu, cpu);
+
+#if IS_ENABLED(CONFIG_OPLUS_FEATURE_SCHED_ASSIST)
+	base_test = base_test && task_tpd_check(p, cpu);
+#endif
 
 	return base_test && start_cap_test;
 }
@@ -181,6 +200,12 @@ static void walt_get_indicies(struct task_struct *p, int *order_index,
 	if (num_sched_clusters <= 1)
 		return;
 
+#if IS_ENABLED(CONFIG_OPLUS_FEATURE_SCHED_ASSIST)
+	if (should_ux_task_skip_eas(p)) {
+		*energy_eval_needed = false;
+	}
+#endif
+
 	if (per_task_boost > TASK_BOOST_ON_MID) {
 		*order_index = num_sched_clusters - 1;
 		*energy_eval_needed = false;
@@ -240,6 +265,14 @@ enum fastpaths {
 	CLUSTER_PACKING_FASTPATH,
 	PIPELINE_FASTPATH,
 	YIELD_FASTPATH,
+
+#if IS_ENABLED(CONFIG_OPLUS_FEATURE_FRAME_BOOST)
+	FRAME_BOOST_SELECT,
+#endif
+
+#ifdef CONFIG_OPLUS_FEATURE_SCHED_SPREAD
+	NR_WAKEUP_SELECT,
+#endif /* CONFIG_OPLUS_FEATURE_SCHED_SPREAD */
 };
 
 static inline bool is_complex_sibling_idle(int cpu)
@@ -261,6 +294,11 @@ static inline bool walt_should_reject_fbt_cpu(struct walt_rq *wrq, struct task_s
 
 	if (order_index != 0 && cpu_partial_halted(cpu))
 		return true;
+
+#if IS_ENABLED(CONFIG_OPLUS_FEATURE_SCHED_ASSIST)
+	if (should_ux_task_skip_cpu(p, cpu))
+		return true;
+#endif
 
 	/*
 	 * This CPU is the target of an active migration that's
@@ -342,6 +380,10 @@ static void walt_find_best_target(struct sched_domain *sd,
 	unsigned int search_sibling_cluster = 0;
 	bool visited_clusters[MAX_CLUSTERS] = {[0 ... (MAX_CLUSTERS-1)] = false};
 
+#if IS_ENABLED(CONFIG_OPLUS_FEATURE_SCHED_ASSIST)
+	cpumask_t new_allowed_cpus;
+#endif
+
 	/* Find start CPU based on boost value */
 	start_cpu = fbt_env->start_cpu;
 
@@ -376,6 +418,19 @@ static void walt_find_best_target(struct sched_domain *sd,
 		goto out;
 	}
 
+#if IS_ENABLED(CONFIG_OPLUS_FEATURE_SCHED_ASSIST)
+	cpumask_copy(&new_allowed_cpus, &p->cpus_mask);
+#endif
+#ifdef CONFIG_OPLUS_FEATURE_SCHED_SPREAD
+	/* enabled nr-balance to spread tasks */
+	sched_assist_spread_tasks(p, new_allowed_cpus, fbt_env->order_index, fbt_env->end_index,
+		fbt_env->skip_cpu, candidates, fbt_env->strict_max);
+	if (!cpumask_empty(candidates)) {
+		fbt_env->fastpath = NR_WAKEUP_SELECT;
+		goto out;
+	}
+#endif /* CONFIG_OPLUS_FEATURE_SCHED_SPREAD */
+
 /* retry for sibling cluster */
 retry:
 	for (cluster = 0; cluster < num_sched_clusters; cluster++) {
@@ -393,9 +448,17 @@ retry:
 			if (!(search_sibling_cluster & BIT(cluster)))
 				continue;
 			cluster_id = cluster;
+#if IS_ENABLED(CONFIG_OPLUS_FEATURE_SCHED_ASSIST)
+			cpumask_and(&visit_cpus, &new_allowed_cpus, &sched_cluster[cluster]->cpus);
+#else
 			cpumask_and(&visit_cpus, p->cpus_ptr, &sched_cluster[cluster]->cpus);
+#endif
 		} else {
+#if IS_ENABLED(CONFIG_OPLUS_FEATURE_SCHED_ASSIST)
+			cpumask_and(&visit_cpus, &new_allowed_cpus, &cpu_array[order_index][cluster]);
+#else
 			cpumask_and(&visit_cpus, p->cpus_ptr, &cpu_array[order_index][cluster]);
+#endif
 			cluster_id = cpu_cluster(
 					cpumask_first(&cpu_array[order_index][cluster]))->id;
 		}
@@ -906,6 +969,7 @@ int walt_find_energy_efficient_cpu(struct task_struct *p, int prev_cpu,
 	cpumask_clear(candidates);
 
 	wts = (struct walt_task_struct *) p->android_vendor_data1;
+#if !IS_ENABLED(CONFIG_OPLUS_FEATURE_PIPELINE)
 	pipeline_cpu = wts->pipeline_cpu;
 
 	if (pipeline_in_progress() &&
@@ -933,6 +997,21 @@ int walt_find_energy_efficient_cpu(struct task_struct *p, int prev_cpu,
 		fbt_env.fastpath = PIPELINE_FASTPATH;
 		goto out;
 	}
+#else
+	pipeline_cpu = oplus_get_task_pipeline_cpu(p);
+	if (pipeline_cpu != -1) {
+		if (cpumask_test_cpu(pipeline_cpu, p->cpus_ptr) &&
+				cpu_active(pipeline_cpu) &&
+				!cpu_halted(pipeline_cpu)) {
+			if (!((pipeline_cpu == nr_cpu_ids - 1) && is_reserved(pipeline_cpu)) &&
+				!oplus_pipeline_low_latency_task(pipeline_cpu)) {
+				best_energy_cpu = pipeline_cpu;
+				fbt_env.fastpath = PIPELINE_FASTPATH;
+				goto pipeline_out;
+			}
+		}
+	}
+#endif
 
 	/*
 	 * If yield count is high then this must be an induced sleep wakeup
@@ -1093,6 +1172,19 @@ int walt_find_energy_efficient_cpu(struct task_struct *p, int prev_cpu,
 unlock:
 	rcu_read_unlock();
 out:
+
+#if IS_ENABLED(CONFIG_OPLUS_FEATURE_FRAME_BOOST)
+	if (set_frame_group_task_to_perfer_cpu(p, &best_energy_cpu))
+		fbt_env.fastpath = FRAME_BOOST_SELECT;
+#endif
+
+#if IS_ENABLED(CONFIG_OPLUS_FEATURE_SCHED_ASSIST)
+	set_ux_task_to_prefer_cpu(p, &best_energy_cpu);
+#endif
+
+#if IS_ENABLED(CONFIG_OPLUS_FEATURE_PIPELINE)
+pipeline_out:
+#endif
 	if (best_energy_cpu < 0 || best_energy_cpu >= WALT_NR_CPUS)
 		best_energy_cpu = prev_cpu;
 
@@ -1120,6 +1212,10 @@ walt_select_task_rq_fair(void *unused, struct task_struct *p, int prev_cpu,
 	sync = (wake_flags & WF_SYNC) && !(current->flags & PF_EXITING);
 	sibling_count_hint = p->wake_q_count;
 	p->wake_q_count = 0;
+
+#ifdef CONFIG_OPLUS_CPU_AUDIO_PERF
+	oplus_sched_assist_audio_set_wake_up_idle(p);
+#endif
 
 	*target_cpu = walt_find_energy_efficient_cpu(p, prev_cpu, sync, sibling_count_hint);
 }
@@ -1184,6 +1280,7 @@ static void binder_restore_priority_hook(void *data,
  */
 int walt_get_mvp_task_prio(struct task_struct *p)
 {
+#if (!IS_ENABLED(CONFIG_OPLUS_FEATURE_SCHED_ASSIST))
 	if (walt_pipeline_low_latency_task(p))
 		return WALT_PIPELINE_MVP;
 
@@ -1198,6 +1295,7 @@ int walt_get_mvp_task_prio(struct task_struct *p)
 
 	if (task_rtg_high_prio(p))
 		return WALT_RTG_MVP;
+#endif
 
 	return WALT_NOT_MVP;
 }
@@ -1429,6 +1527,14 @@ static void walt_cfs_check_preempt_wakeup(void *unused, struct rq *rq, struct ta
 	p_is_mvp = !list_empty(&wts_p->mvp_list) && wts_p->mvp_list.next;
 	curr_is_mvp = !list_empty(&wts_c->mvp_list) && wts_c->mvp_list.next;
 
+#if IS_ENABLED(CONFIG_OPLUS_FEATURE_SCHED_ASSIST)
+	/* p and current are not mvp, junmp to oplus preemption decision */
+	if (!p_is_mvp && !curr_is_mvp) {
+		oplus_check_preempt_wakeup(rq, p, preempt, nopreempt);
+		return;
+	}
+#endif
+
 	/*
 	 * current is not MVP, so preemption decision
 	 * is simple.
@@ -1481,6 +1587,7 @@ static void walt_cfs_replace_next_task_fair(void *unused, struct rq *rq, struct 
 					    struct sched_entity **se, bool *repick, bool simple,
 					    struct task_struct *prev)
 {
+#if (!IS_ENABLED(CONFIG_OPLUS_FEATURE_SCHED_ASSIST))
 	struct walt_rq *wrq = &per_cpu(walt_rq, cpu_of(rq));
 	struct walt_task_struct *wts;
 	struct task_struct *mvp;
@@ -1542,6 +1649,9 @@ static void walt_cfs_replace_next_task_fair(void *unused, struct rq *rq, struct 
 			 cpu_of(rq), ((*p)->flags & PF_KTHREAD));
 
 	trace_walt_cfs_mvp_pick_next(mvp, wts, walt_cfs_mvp_task_limit(mvp));
+#else
+	android_rvh_replace_next_task_fair_handler(NULL, rq, p, se, repick, simple, prev);
+#endif
 }
 
 void inc_rq_walt_stats(struct rq *rq, struct task_struct *p)

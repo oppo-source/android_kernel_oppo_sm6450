@@ -2468,11 +2468,11 @@ void clk_lucid_5lpe_pll_configure(struct clk_alpha_pll *pll, struct regmap *regm
 	regmap_write(regmap, PLL_CAL_L_VAL(pll), TRION_PLL_CAL_VAL);
 	clk_alpha_pll_write_config(pll, regmap, PLL_OFF_ALPHA_VAL, config->alpha);
 	clk_alpha_pll_write_config(pll, regmap, PLL_OFF_CONFIG_CTL,
-				     config->config_ctl_val);
+					config->config_ctl_val);
 	clk_alpha_pll_write_config(pll, regmap, PLL_OFF_CONFIG_CTL_U,
-				     config->config_ctl_hi_val);
+					config->config_ctl_hi_val);
 	clk_alpha_pll_write_config(pll, regmap, PLL_OFF_CONFIG_CTL_U1,
-				     config->config_ctl_hi1_val);
+					config->config_ctl_hi1_val);
 	clk_alpha_pll_write_config(pll, regmap, PLL_OFF_USER_CTL,
 					config->user_ctl_val);
 	clk_alpha_pll_write_config(pll, regmap, PLL_OFF_USER_CTL_U,

@@ -584,7 +584,7 @@ config QCOM_WATCHDOG_BARK_TIME
 	depends on QCOM_WDT_CORE
 	int "Qualcomm Technologies, Inc. Watchdog bark time in ms"
 	default 11000
-	range 11000 11000
+	range 11000 22000
 	help
 	  The amount of time, in milliseconds, that should elapse after
 	  a watchdog timer reset before a bark interrupt is sent from the
@@ -685,6 +685,18 @@ config CDSPRM_VTCM_DYNAMIC_DEBUG
 	  feature from the debugfs node from cdsprm driver.When the test is
 	  enabled, the vtcm partition details are sent to the CDSP via rpmsg
 	  channel.
+
+config OPLUS_POWERINFO_RPMH
+	bool "powerinfo rpmh config"
+	default n
+	help
+	  Select this config to enable powerinfo rpmh
+
+config OPLUS_POWERINFO_STANDBY_DEBUG
+	bool "powerinfo standby config"
+	default n
+	help
+	  Select this config to enable powerinfo standby debug
 
 config QCOM_ADSP_SLEEPMON
 	tristate "ADSP sleep monitor"
@@ -959,6 +971,24 @@ config MINIDUMP_MAX_ENTRIES
 	help
 	  This defines maximum number of entries to be allocated for application
 	  subsytem in Minidump table.
+
+config OPLUS_FEATURE_STANDBY_NETLINK_CLOCK
+	bool "Enable clocks statistics collection for Standby Netlink Channel"
+	default n
+	help
+	This configuration enables the clocks info statistics via a special protocol on the standby netlink channel.
+
+  config OPLUS_FEATURE_STANDBY_NETLINK_REGULATOR
+	bool "Enable regulators statistics collection for Standby Netlink Channel"
+	default n
+	help
+	This configuration enables the regulators info statistics via a special protocol on the standby netlink channel.
+
+  config OPLUS_FEATURE_STANDBY_NETLINK_SMP2P
+	bool "Enable SMP2P statistics collection for Standby Netlink Channel"
+	default n
+	help
+	This configuration enables the smp2p info statistics via a special protocol on the standby netlink channel.
 
 config QCOM_HUNG_TASK_ENH
         tristate "QTI Hung Task Enhancement"
@@ -1237,4 +1267,14 @@ config QTI_HW_KEY_MANAGER_V1
 	 HWKM hardware to perform key operations from the kernel which will
 	 be used for storage encryption.
 
+	  This driver gathers configuration parameters from sysfs
+	  userspace and relays them to CPUCP via SCMI communication.
+	  It is intended to be used by clients familiar with modifying
+	  the feature control settings.
+
+config OPLUS_RPMH_QCOM
+	bool "powerinfo rpmh config v2"
+	default n
+	help
+	  Select this config to enable powerinfo rpmh v2
 endmenu

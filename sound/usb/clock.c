@@ -643,4 +643,3 @@ int snd_usb_init_sample_rate(struct snd_usb_audio *chip,
 		return set_sample_rate_v2v3(chip, fmt, rate);
 	}
 }
-

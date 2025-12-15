@@ -90,11 +90,10 @@ static int pdr_locator_new_server(struct qmi_handle *qmi,
 	pdr->locator_addr.sq_port = svc->port;
 
 	pdr->locator_init_complete = true;
-	mutex_unlock(&pdr->lock);
 
 	/* Service pending lookup requests */
 	schedule_work(&pdr->locator_work);
-
+	mutex_unlock(&pdr->lock);
 	return 0;
 }
 

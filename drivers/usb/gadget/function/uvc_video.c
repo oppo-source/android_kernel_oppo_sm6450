@@ -469,13 +469,14 @@ static void uvcg_video_hw_submit(struct kthread_work *work)
 			 */
 			list_add_tail(&req->list, &video->req_free);
 			/*
-			 * There is a new free request - wake up the pump.
-			 */
+			* There is a new free request - wake up the pump.
+			*/
 			queue_work(video->async_wq, &video->pump);
 
 		}
 
 		spin_unlock_irqrestore(&video->req_lock, flags);
+
 	}
 }
 
