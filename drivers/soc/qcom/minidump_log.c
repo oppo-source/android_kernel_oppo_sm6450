@@ -121,7 +121,7 @@ static bool minidump_ftrace_dump = true;
 #ifndef CONFIG_MINIDUMP_ALL_TASK_INFO
 #define MD_RUNQUEUE_PAGES	8
 #else
-#define MD_RUNQUEUE_PAGES	150
+#define MD_RUNQUEUE_PAGES	300
 #endif
 
 static bool md_in_oops_handler;
@@ -139,7 +139,7 @@ static DEFINE_PER_CPU(struct pt_regs, regs_before_stop);
 #endif
 
 #ifdef CONFIG_QCOM_MINIDUMP_PANIC_KTASK_STACK
-#define MD_KTASK_STACK_PAGES	64
+#define MD_KTASK_STACK_PAGES	768
 static struct seq_buf *md_ktask_stack_buf;
 #endif
 
@@ -159,6 +159,9 @@ static bool stack_dump;
 module_param(stack_dump, bool, 0644);
 
 #define FREQ_LOG_MAX	10
+
+/* #ifdef OPLUS_FEATURE_DFR */
+static bool current_stack_enable = false;
 
 static int register_stack_entry(struct md_region *ksp_entry, u64 sp, u64 size)
 {
@@ -260,11 +263,16 @@ void dump_stack_minidump(u64 sp)
 	struct vm_struct *stack_vm_area;
 	unsigned int i, copy_pages;
 
-	if (IS_ENABLED(CONFIG_QCOM_DYN_MINIDUMP_STACK) || !stack_dump)
+	if (current_stack_enable == true) {
+		pr_err("CONFIG_QCOM_DYN_MINIDUMP_STACK is enabled, returning.\n");
 		return;
+	}
 
-	if (is_idle_task(current))
+	if (is_idle_task(current)) {
+		pr_err("CPU %d current (stack_vm_area=%px, stack=%px, stack_refcount=%d) is idle, returning.\n",
+			cpu, current->stack_vm_area, current->stack, refcount_read(&current->stack_refcount));
 		return;
+	}
 
 	is_vmap_stack = IS_ENABLED(CONFIG_VMAP_STACK);
 
@@ -280,20 +288,30 @@ void dump_stack_minidump(u64 sp)
 	 * address of one page of the stack.
 	 */
 	stack_vm_area = task_stack_vm_area(current);
-	if (is_vmap_stack) {
-		sp &= ~(PAGE_SIZE - 1);
-		copy_pages = calculate_copy_pages(sp, stack_vm_area);
-		for (i = 0; i < copy_pages; i++) {
-			scnprintf(ksp_entry.name, sizeof(ksp_entry.name),
-				  "KSTACK%d_%d", cpu, i);
-			(void)register_stack_entry(&ksp_entry, sp, PAGE_SIZE);
-			sp += PAGE_SIZE;
+	if (stack_vm_area) {
+		if (is_vmap_stack) {
+			sp &= ~(PAGE_SIZE - 1);
+			copy_pages = calculate_copy_pages(sp, stack_vm_area);
+			if (copy_pages > 0) {
+				for (i = 0; i < copy_pages; i++) {
+					scnprintf(ksp_entry.name, sizeof(ksp_entry.name),
+						  "KSTACK%d_%d", cpu, i);
+					(void)register_stack_entry(&ksp_entry, sp, PAGE_SIZE);
+					sp += PAGE_SIZE;
+				}
+			} else {
+				pr_err("CPU %d current (comm=%s, pid=%d) sp (0x%llx) not in range (0x%llx, +0x%zx), returning.\n",
+					cpu, current->comm, current->pid, sp, (u64)stack_vm_area->addr, get_vm_area_size(stack_vm_area));
+			}
+		} else {
+			sp &= ~(THREAD_SIZE - 1);
+			scnprintf(ksp_entry.name, sizeof(ksp_entry.name), "KSTACK%d",
+				  cpu);
+			(void)register_stack_entry(&ksp_entry, sp, THREAD_SIZE);
 		}
 	} else {
-		sp &= ~(THREAD_SIZE - 1);
-		scnprintf(ksp_entry.name, sizeof(ksp_entry.name), "KSTACK%d",
-			  cpu);
-		(void)register_stack_entry(&ksp_entry, sp, THREAD_SIZE);
+		pr_err("CPU %d current (comm=%s, pid=%d, stack=%px, stack_refcount=%d) stack_vm_area is 0, returning.\n",
+			cpu, current->comm, current->pid, current->stack, refcount_read(&current->stack_refcount));
 	}
 
 	scnprintf(ktsk_entry.name, sizeof(ktsk_entry.name), "KTASK%d", cpu);
@@ -897,9 +915,13 @@ static void md_dump_runqueues(void)
 #if IS_ENABLED(CONFIG_SCHED_WALT)
 	struct walt_task_struct *wts;
 #endif
+	int ret;
 
-	if (!md_runq_seq_buf)
+	ret = md_register_panic_entries(MD_RUNQUEUE_PAGES, "KRUNQUEUE", &md_runq_seq_buf);
+	if (ret || !md_runq_seq_buf) {
+		pr_err("Failed to register minidump KRUNQUEUE, ret=%d, md_runq_seq_buf=%p\n", ret, md_runq_seq_buf);
 		return;
+	}
 
 	for_each_possible_cpu(cpu) {
 		rq = cpu_rq(cpu);
@@ -941,17 +963,17 @@ static void md_dump_runqueues(void)
 #endif
 		seq_buf_printf(md_runq_seq_buf, "%-15s", t->comm);
 		seq_buf_printf(md_runq_seq_buf, "%6d", t->pid);
-		seq_buf_printf(md_runq_seq_buf, "%16lld", t->sched_info.last_arrival);
-		seq_buf_printf(md_runq_seq_buf, "%16lld", t->sched_info.last_queued);
-		seq_buf_printf(md_runq_seq_buf, "%16lld", t->sched_info.run_delay);
+		seq_buf_printf(md_runq_seq_buf, "%6llu.%09llu", t->sched_info.last_arrival / 1000000000, t->sched_info.last_arrival % 1000000000);
+		seq_buf_printf(md_runq_seq_buf, "%6llu.%09llu", t->sched_info.last_queued / 1000000000, t->sched_info.last_queued % 1000000000);
+		seq_buf_printf(md_runq_seq_buf, "%6llu.%09llu", t->sched_info.run_delay / 1000000000, t->sched_info.run_delay % 1000000000);
 		seq_buf_printf(md_runq_seq_buf, "%12ld", t->sched_info.pcount);
-		seq_buf_printf(md_runq_seq_buf, "%4d", t->on_cpu);
+		seq_buf_printf(md_runq_seq_buf, "%4d", task_cpu(t));
 		seq_buf_printf(md_runq_seq_buf, "%5d", t->prio);
 		seq_buf_printf(md_runq_seq_buf, "%*s", 6, md_get_task_state(t));
 #if IS_ENABLED(CONFIG_SCHED_WALT)
 		wts = (struct walt_task_struct *) t->android_vendor_data1;
-		seq_buf_printf(md_runq_seq_buf, "%17llu", wts->last_enqueued_ts);
-		seq_buf_printf(md_runq_seq_buf, "%16llu", wts->last_sleep_ts);
+		seq_buf_printf(md_runq_seq_buf, "%7llu.%09llu", wts->last_enqueued_ts / 1000000000, wts->last_enqueued_ts % 1000000000);
+		seq_buf_printf(md_runq_seq_buf, "%6llu.%09llu", wts->last_sleep_ts / 1000000000, wts->last_sleep_ts % 1000000000);
 #endif
 		seq_buf_printf(md_runq_seq_buf, "\n");
 	}
@@ -1007,6 +1029,7 @@ static void md_dump_data(unsigned long addr, int nbytes, const char *name)
 
 static void md_reg_context_data(struct pt_regs *regs)
 {
+	unsigned int i;
 	int nbytes = 128;
 
 	if (user_mode(regs) ||  !regs->pc)
@@ -1015,6 +1038,12 @@ static void md_reg_context_data(struct pt_regs *regs)
 	md_dump_data(regs->pc - nbytes, nbytes * 2, "PC");
 	md_dump_data(regs->regs[30] - nbytes, nbytes * 2, "LR");
 	md_dump_data(regs->sp - nbytes, nbytes * 2, "SP");
+	for (i = 0; i < 30; i++) {
+		char name[4];
+
+		snprintf(name, sizeof(name), "X%u", i);
+		md_dump_data(regs->regs[i] - nbytes, nbytes * 2, name);
+	}
 }
 
 static inline void md_dump_panic_regs(void)
@@ -1246,8 +1275,6 @@ static void md_register_panic_data(void)
 				  &md_cntxt_seq_buf);
 	register_trace_android_vh_ipi_stop(md_ipi_stop, NULL);
 #endif
-	md_register_panic_entries(MD_RUNQUEUE_PAGES, "KRUNQUEUE",
-				  &md_runq_seq_buf);
 #ifdef CONFIG_QCOM_MINIDUMP_PANIC_KTASK_STACK
 	md_register_panic_entries(MD_KTASK_STACK_PAGES, "KTASK_STACK",
 				  &md_ktask_stack_buf);
@@ -1532,9 +1559,6 @@ static void register_pstore_info(void)
 	}
 }
 #endif
-
-/* #ifdef OPLUS_FEATURE_DFR */
-static bool current_stack_enable = false;
 
 int clear_md_region(int regno,struct md_region *ksp_entry)
 {
